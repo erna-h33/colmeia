@@ -113,8 +113,7 @@ const Storage = {
     taskCategories: ['Shopping list', 'Odds & Ends', 'Work'],
     noteCategories: ['Idea', 'Link', 'Recipe', 'Gift idea', 'To read'],
   };
-  let attachPickerFor = null; // {kind:'event'|'task', id}
-  let modal = null; // 'event' | 'task' | 'note' | 'export' | 'day:YYYY-MM-DD' | 'viewnote:id'
+  let modal = null; // 'event' | 'task' | 'note' | 'export' | 'day:YYYY-MM-DD'
   let modalReturn = null;
   let editingEventId = null;
   let editingTaskId = null;
@@ -150,7 +149,6 @@ const Storage = {
     editingCategoryName = null;
     modal = null;
     modalReturn = null;
-    attachPickerFor = null;
   }
 
   function captureDraftFromForm() {
@@ -511,8 +509,6 @@ const Storage = {
     sun: '<circle cx="12" cy="12" r="4"></circle><line x1="12" y1="2" x2="12" y2="4"></line><line x1="12" y1="20" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"></line><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="4" y2="12"></line><line x1="20" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"></line><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"></line>',
     moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>',
     edit: '<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>',
-    attach:
-      '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>',
     trash:
       '<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line>',
     plus: '<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>',
@@ -649,7 +645,6 @@ const Storage = {
       ${sidebar()}
       <div class="main">${viewBody()}</div>
       ${modal ? renderModal() : ''}
-      ${attachPickerFor ? renderAttachPicker() : ''}
     `;
     bindEvents();
   }
@@ -820,9 +815,6 @@ const Storage = {
 
   function eventCard(ev) {
     const badge = eventBadge(ev);
-    const attached = state.notes.filter((n) =>
-      (ev.attached || []).includes(n.id),
-    );
     const isRecurring = ev.repeat && ev.repeat !== 'none';
     return `
       <div class="card">
@@ -834,11 +826,9 @@ const Storage = {
           </div>
           ${badge.label ? `<div class="badge ${badge.cls}">${badge.label}</div>` : ''}
         </div>
-        ${attached.map((n) => clipTab(n)).join('')}
         <div class="row-actions">
           <button class="icon-btn" data-edit-event="${ev.id}">✎ Edit</button>
           ${!isRecurring ? `<button class="icon-btn" data-snooze-event="${ev.id}">⏰ Snooze +1d</button>` : ''}
-          <button class="icon-btn" data-attach-event="${ev.id}">📎 Attach</button>
           <button class="icon-btn danger" data-del-event="${ev.id}">Delete</button>
         </div>
       </div>`;
@@ -927,13 +917,6 @@ const Storage = {
     `;
   }
 
-  function clipTab(n) {
-    return `<div class="clip-tab" data-open-note="${n.id}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 10v7a4 4 0 008 0V7a2.5 2.5 0 00-5 0v9"/></svg>
-      ${escapeHtml(n.title.slice(0, 26))}${n.title.length > 26 ? '…' : ''}
-    </div>`;
-  }
-
   // ---------- To Do ----------
   function weekView() {
     const columns = state.taskCategories.slice();
@@ -1000,9 +983,6 @@ const Storage = {
   }
 
   function taskItem(t) {
-    const attached = state.notes.filter((n) =>
-      (t.attached || []).includes(n.id),
-    );
     return `
       <div class="task-item">
         <div class="checkbox ${t.done ? 'done' : ''}" data-toggle-task="${t.id}">
@@ -1011,11 +991,9 @@ const Storage = {
         <div class="task-main">
           <div class="task-text ${t.done ? 'done' : ''}">${priorityDot(t.priority)}${escapeHtml(t.text)}</div>
           ${t.day ? `<span class="task-day">${t.day}</span>` : ''}
-          ${attached.map((n) => clipTab(n)).join('')}
         </div>
         <div class="row-actions">
           <button class="icon-btn" data-edit-task="${t.id}" title="Edit">${actionIcon('edit')}</button>
-          <button class="icon-btn" data-attach-task="${t.id}" title="Attach">${actionIcon('attach')}</button>
           <button class="icon-btn danger" data-del-task="${t.id}" title="Delete">${actionIcon('trash')}</button>
         </div>
       </div>`;
@@ -1307,53 +1285,7 @@ const Storage = {
         </div>
       </div>`;
     }
-    if (modal && modal.startsWith('viewnote:')) {
-      const n = state.notes.find((x) => x.id === modal.split(':')[1]);
-      if (!n) return '';
-      return `<div class="overlay" data-overlay>
-        <div class="modal">
-          <h3>${escapeHtml(n.title)}</h3>
-          <div class="note-body" style="font-size:14px; margin-bottom:14px;">${isUrl(n.body) ? `<a href="${escapeAttr(n.body)}" target="_blank" rel="noopener">${escapeHtml(n.body)}</a>` : escapeHtml(n.body || '')}</div>
-          <div class="modal-actions"><button class="btn ghost" data-close-modal>Close</button></div>
-        </div>
-      </div>`;
-    }
     return '';
-  }
-
-  function renderAttachPicker() {
-    const { kind, id } = attachPickerFor;
-    const target =
-      kind === 'event'
-        ? state.events.find((e) => e.id === id)
-        : state.tasks.find((t) => t.id === id);
-    const already = new Set(target.attached || []);
-    return `<div class="overlay" data-overlay-attach>
-      <div class="modal">
-        <h3>Clip a note or link</h3>
-        ${
-          state.notes.length === 0
-            ? `<div class="empty" style="padding:20px 0;">You haven't saved any notes or links yet.</div>`
-            : `
-        <div style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
-          ${state.notes
-            .map(
-              (n) => `
-            <label style="display:flex; gap:8px; align-items:center; font-size:13.5px; padding:6px 4px; border-bottom:1px dashed var(--line);">
-              <input type="checkbox" data-pick-note="${n.id}" ${already.has(n.id) ? 'checked' : ''} />
-              <span class="note-kind ${n.kind}" style="font-size:9px;">${n.kind}</span>
-              ${escapeHtml(n.title)}
-            </label>
-          `,
-            )
-            .join('')}
-        </div>`
-        }
-        <div class="modal-actions">
-          <button class="btn ghost" data-close-attach>Done</button>
-        </div>
-      </div>
-    </div>`;
   }
 
   function escapeHtml(s) {
@@ -1560,7 +1492,7 @@ const Storage = {
           const ev = state.events.find((e) => e.id === editingEventId);
           Object.assign(ev, data);
         } else {
-          state.events.push({ id: uid(), ...data, attached: [] });
+          state.events.push({ id: uid(), ...data });
         }
         editingEventId = null;
         eventDraft = null;
@@ -1671,7 +1603,7 @@ const Storage = {
           const t = state.tasks.find((x) => x.id === editingTaskId);
           Object.assign(t, data);
         } else {
-          state.tasks.push({ id: uid(), ...data, done: false, attached: [] });
+          state.tasks.push({ id: uid(), ...data, done: false });
         }
         editingTaskId = null;
         taskDraft = null;
@@ -1962,12 +1894,6 @@ const Storage = {
           const idx = state.notes.findIndex((x) => x.id === id);
           if (idx === -1) return;
           state.notes.splice(idx, 1);
-          state.events.forEach(
-            (e) => (e.attached = (e.attached || []).filter((x) => x !== id)),
-          );
-          state.tasks.forEach(
-            (t) => (t.attached = (t.attached || []).filter((x) => x !== id)),
-          );
           editingNoteId = null;
           modal = null;
           save();
@@ -1981,20 +1907,7 @@ const Storage = {
           const idx = state.notes.findIndex((x) => x.id === id);
           if (idx === -1) return;
           state.notes.splice(idx, 1);
-          state.events.forEach(
-            (e) => (e.attached = (e.attached || []).filter((x) => x !== id)),
-          );
-          state.tasks.forEach(
-            (t) => (t.attached = (t.attached || []).filter((x) => x !== id)),
-          );
           save();
-          render();
-        }),
-    );
-    document.querySelectorAll('[data-open-note]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          modal = 'viewnote:' + b.dataset.openNote;
           render();
         }),
     );
@@ -2009,55 +1922,6 @@ const Storage = {
       (b) =>
         (b.onclick = () => {
           state.noteCategoryFilter = b.dataset.categoryFilter || null;
-          render();
-        }),
-    );
-
-    // ---- attach ----
-    document.querySelectorAll('[data-attach-event]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          attachPickerFor = { kind: 'event', id: b.dataset.attachEvent };
-          render();
-        }),
-    );
-    document.querySelectorAll('[data-attach-task]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          attachPickerFor = { kind: 'task', id: b.dataset.attachTask };
-          render();
-        }),
-    );
-    document.querySelectorAll('[data-pick-note]').forEach(
-      (cb) =>
-        (cb.onchange = () => {
-          const { kind, id } = attachPickerFor;
-          const target =
-            kind === 'event'
-              ? state.events.find((e) => e.id === id)
-              : state.tasks.find((t) => t.id === id);
-          target.attached = target.attached || [];
-          const nid = cb.dataset.pickNote;
-          if (cb.checked) {
-            if (!target.attached.includes(nid)) target.attached.push(nid);
-          } else {
-            target.attached = target.attached.filter((x) => x !== nid);
-          }
-          save();
-        }),
-    );
-    const attachOverlay = document.querySelector('[data-overlay-attach]');
-    if (attachOverlay)
-      attachOverlay.addEventListener('click', (e) => {
-        if (e.target === attachOverlay) {
-          attachPickerFor = null;
-          render();
-        }
-      });
-    document.querySelectorAll('[data-close-attach]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          attachPickerFor = null;
           render();
         }),
     );

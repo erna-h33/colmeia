@@ -132,11 +132,6 @@ body {
   background: #4e2a1b;
   color: #ee8a5f;
 }
-#app.dark .clip-tab {
-  background: #453b21;
-  border-color: #6b5a2e;
-  color: #eac978;
-}
 #app.dark .btn.ghost {
   color: var(--graphite);
 }
@@ -428,25 +423,6 @@ body {
   border-color: var(--clay);
 }
 
-/* torn-paper attach tab */
-.clip-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: #f3e4b8;
-  border: 1px solid #c9a44e;
-  padding: 3px 10px 3px 7px;
-  border-radius: 20px;
-  font-size: var(--font-size-medium);
-  color: #7a5a1e;
-  cursor: pointer;
-  margin-top: 8px;
-}
-.clip-tab svg {
-  width: 11px;
-  height: 11px;
-}
-
 /* ---------- To Do ---------- */
 .task-item {
   display: flex;
@@ -638,7 +614,7 @@ body {
   margin-top: 2px;
 }
 .note-tag {
-  font-size: var(--font-size-medium);
+  font-size: var(--font-size-small);
   color: var(--muted);
   background: var(--paper-dim);
   padding: 1px 8px;
@@ -1000,7 +976,21 @@ body {
     padding: 8px 12px;
     white-space: nowrap;
   }
-  .sidebar-tools,
+  /* Was `display: none` -- dark mode / export / sign out had no other way
+     to be reached on mobile at all. Fold them into the same horizontally
+     scrolling strip as the nav buttons instead of hiding them. The
+     decorative tagline + sync status in .sidebar-foot stays hidden since
+     it's not actionable and there's no room for it here. */
+  .sidebar-tools {
+    margin-top: 0;
+    flex-direction: row;
+    flex-shrink: 0;
+    gap: 8px;
+  }
+  .sidebar-tools .side-btn {
+    width: auto;
+    white-space: nowrap;
+  }
   .sidebar-foot {
     display: none;
   }
@@ -1009,7 +999,7 @@ body {
     padding: 16px;
   }
   .notes-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: 1fr;
   }
   .category-grid {
     grid-template-columns: 1fr;
@@ -1019,8 +1009,41 @@ body {
   }
   .day-num {
     font-size: var(--font-size-medium);
+    width: 26px;
+    height: 26px;
+  }
+  .day-cell.today .day-num {
+    width: 26px;
+    height: 26px;
   }
   .view-head {
     align-items: flex-start;
+  }
+  /* Fixed 150px min-width plus two 30px nav buttons and the today button
+     don't all fit on a narrow phone -- let the row wrap instead of
+     overflowing off-screen. */
+  .month-nav {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .month-nav .month-label {
+    min-width: 0;
+  }
+  /* Two fields side by side (date/time, day/priority) get too cramped
+     below this width -- stack them instead. */
+  .field-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .modal {
+    padding: 18px 16px;
+  }
+  /* Bump up tap targets a bit for touch. */
+  .icon-btn {
+    padding: 6px 10px;
+  }
+  .checkbox {
+    width: 22px;
+    height: 22px;
   }
 }
