@@ -129,6 +129,7 @@ const Storage = {
   let authEmail = '';
   let authPassword = '';
   let syncStatus = 'Ready';
+  let jokeOfTheDay = null;
 
   // Inline validation state. `fieldErrors` maps an input id -> true when it
   // failed validation on the last save attempt (shows "Required field" under
@@ -299,6 +300,48 @@ const Storage = {
     } catch (e) {
       syncStatus = 'Save failed';
       console.error('save failed', e);
+    }
+  }
+
+  // Fetches a "joke of the day" for the sidebar footer, purely cosmetic.
+  // Cached in its own localStorage key (separate from the Storage adapter
+  // above -- this never touches account data or the Supabase sync path) so
+  // it only refetches once per calendar day. Any failure (offline, API
+  // down, blocked) just leaves jokeOfTheDay as null, and the sidebar falls
+  // back to its normal static tagline -- never surfaces an error.
+  async function loadJokeOfTheDay() {
+    const CACHE_KEY = 'joke_of_the_day_v1';
+    const today = localDateStr(new Date());
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+      if (cached && cached.date === today && cached.joke) {
+        jokeOfTheDay = cached.joke;
+        render();
+        return;
+      }
+    } catch (e) {
+      // ignore corrupt cache, fall through to a fresh fetch
+    }
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch('https://icanhazdadjoke.com/', {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data || !data.joke) return;
+      jokeOfTheDay = data.joke;
+      localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({ date: today, joke: data.joke }),
+      );
+      render();
+    } catch (e) {
+      // network error, timeout, blocked by CSP, etc. -- keep the fallback
+      // tagline, no need to log this as a real error
     }
   }
 
@@ -673,7 +716,7 @@ const Storage = {
         <button class="side-btn" data-auth-signout><span>↩</span> <span>Sign out</span></button>
         <div class="sidebar-foot">
           <div class="sync-status">${escapeHtml(syncStatus)}</div>
-          Everything you need to track, in one place.
+          ${jokeOfTheDay ? `"${escapeHtml(jokeOfTheDay)}"` : 'Everything you need to track, in one place.'}
         </div>
       </div>
     </div>`;
@@ -2031,6 +2074,7 @@ const Storage = {
   }
 
   initAuth();
+  loadJokeOfTheDay();
 })();
 
 // Register service worker for offline / installable support (Add to Home Screen)
