@@ -970,6 +970,12 @@ body {
     flex-direction: column;
     height: 100vh;
   }
+  .auth-card h1 {
+    text-align: center;
+  }
+  .auth-card p {
+    text-align: center;
+  }
   .sidebar {
     width: 100%;
     flex-direction: column;
