@@ -456,10 +456,13 @@ const Storage = {
     if (n.kind === 'idea') return 'Idea';
     return '';
   }
-  // Deterministic color per category name -- same category always gets the
-  // same color, no state needed to track color assignments. Spread across
-  // distinct hues (not just shades of the same amber/brown) so adjacent
-  // categories are easy to tell apart at a glance.
+  // Color per category -- spread across distinct hues (not just shades of
+  // the same amber/brown) so adjacent categories are easy to tell apart at
+  // a glance. When `list` (the board's actual category order) is given,
+  // color is assigned by position in that list, so two categories shown
+  // side by side never collide as long as there are <= 8 of them. Falls
+  // back to a hash of the name when the category isn't found in `list`
+  // (e.g. a legacy note label not in state.noteCategories).
   const CATEGORY_PALETTE = [
     '#E0433D',
     '#E8A33D',
@@ -470,8 +473,10 @@ const Storage = {
     '#C04670',
     '#A6742E',
   ];
-  function categoryColor(name) {
+  function categoryColor(name, list) {
     if (!name) return null;
+    const idx = list ? list.indexOf(name) : -1;
+    if (idx !== -1) return CATEGORY_PALETTE[idx % CATEGORY_PALETTE.length];
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
@@ -951,7 +956,7 @@ const Storage = {
           .map((cat) => {
             const items = byCat[cat] || [];
             const isReal = cat !== '—';
-            const color = categoryColor(cat);
+            const color = categoryColor(cat, columns);
             const renaming = editingCategoryName === cat;
             const headLeft = renaming
               ? `<input type="text" id="cat-rename-input" value="${escapeAttr(cat)}" style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px; padding:3px 6px; border-radius:8px; border:1.5px solid var(--line); width:100%;" />`
@@ -1044,7 +1049,7 @@ const Storage = {
         filtered
           .map((n) => {
             const cat = noteCategoryLabel(n);
-            const color = categoryColor(cat);
+            const color = categoryColor(cat, state.noteCategories);
             const linkBody = isUrl(n.body);
             return `
         <div class="note-card">
