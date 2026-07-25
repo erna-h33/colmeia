@@ -214,6 +214,13 @@ body {
   background: var(--amber);
   color: var(--ink);
 }
+/* Transparent on desktop -- its children (nav buttons + sidebar-tools) lay
+   out exactly as if they were direct children of .sidebar, same as before
+   this wrapper existed. On mobile it becomes the horizontally scrolling
+   strip instead, separate from the logo above it. */
+.nav-scroll {
+  display: contents;
+}
 .sidebar-tools {
   margin-top: auto;
   display: flex;
@@ -256,6 +263,12 @@ body {
   font-style: normal;
   color: var(--amber);
   margin-bottom: 6px;
+}
+/* Mobile-only footer bar for the joke of the day -- .sidebar-foot (which
+   already shows it on desktop) is hidden on mobile entirely, so this is a
+   separate element fixed to the bottom of the screen instead. */
+.mobile-joke {
+  display: none;
 }
 
 /* ---------- Main ---------- */
@@ -959,17 +972,26 @@ body {
   }
   .sidebar {
     width: 100%;
-    flex-direction: row;
-    align-items: center;
-    padding: 10px;
-    overflow-x: auto;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 10px 0 10px;
+    gap: 6px;
   }
   .brand {
-    display: none;
+    display: block;
+    text-align: center;
+    padding: 4px 0 6px 0;
   }
   .global-search {
     display: none;
+  }
+  .nav-scroll {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 10px;
   }
   .nav-btn {
     flex-direction: row;
@@ -997,7 +1019,7 @@ body {
   }
   .main {
     max-height: none;
-    padding: 16px;
+    padding: 16px 16px calc(52px + env(safe-area-inset-bottom, 0px)) 16px;
   }
   .notes-grid {
     grid-template-columns: 1fr;
@@ -1046,5 +1068,20 @@ body {
   .checkbox {
     width: 22px;
     height: 22px;
+  }
+  .mobile-joke {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    background: var(--ink);
+    color: #9c9375;
+    text-align: center;
+    font-style: italic;
+    font-size: var(--font-size-small);
+    padding: 8px 14px calc(8px + env(safe-area-inset-bottom, 0px)) 14px;
+    border-top: 1.5px solid rgba(237, 227, 200, 0.15);
   }
 }

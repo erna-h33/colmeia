@@ -687,6 +687,7 @@ const Storage = {
     app.innerHTML = `
       ${sidebar()}
       <div class="main">${viewBody()}</div>
+      <div class="mobile-joke">${jokeOfTheDay ? `"${escapeHtml(jokeOfTheDay)}"` : 'Everything you need to track, in one place.'}</div>
       ${modal ? renderModal() : ''}
     `;
     bindEvents();
@@ -701,22 +702,24 @@ const Storage = {
     <div class="sidebar">
       <div class="brand">Colmeia<span>.</span></div>
       <input class="global-search" placeholder="Search everything…" value="${escapeAttr(state.globalQuery || '')}" data-global-search />
-      <button class="nav-btn ${state.view === 'agenda' && !state.globalQuery ? 'active' : ''}" data-view="agenda">
-        ${icon('calendar')} <span>Agenda</span> <span class="count">${upcoming}</span>
-      </button>
-      <button class="nav-btn ${state.view === 'week' && !state.globalQuery ? 'active' : ''}" data-view="week">
-        ${icon('checkSquare')} <span>To Do</span> <span class="count">${openTasks}</span>
-      </button>
-      <button class="nav-btn ${state.view === 'notes' && !state.globalQuery ? 'active' : ''}" data-view="notes">
-        ${icon('fileText')} <span>Notes</span> <span class="count">${state.notes.length}</span>
-      </button>
-      <div class="sidebar-tools">
-        <button class="side-btn" data-toggle-dark>${icon(state.darkMode ? 'sun' : 'moon')} <span>${state.darkMode ? 'Light mode' : 'Dark mode'}</span></button>
-        <button class="side-btn" data-open-modal="export">${icon('download')} <span>Export data</span></button>
-        <button class="side-btn" data-auth-signout><span>↩</span> <span>Sign out</span></button>
-        <div class="sidebar-foot">
-          <div class="sync-status">${escapeHtml(syncStatus)}</div>
-          ${jokeOfTheDay ? `"${escapeHtml(jokeOfTheDay)}"` : 'Everything you need to track, in one place.'}
+      <div class="nav-scroll">
+        <button class="nav-btn ${state.view === 'agenda' && !state.globalQuery ? 'active' : ''}" data-view="agenda">
+          ${icon('calendar')} <span>Agenda</span> <span class="count">${upcoming}</span>
+        </button>
+        <button class="nav-btn ${state.view === 'week' && !state.globalQuery ? 'active' : ''}" data-view="week">
+          ${icon('checkSquare')} <span>To Do</span> <span class="count">${openTasks}</span>
+        </button>
+        <button class="nav-btn ${state.view === 'notes' && !state.globalQuery ? 'active' : ''}" data-view="notes">
+          ${icon('fileText')} <span>Notes</span> <span class="count">${state.notes.length}</span>
+        </button>
+        <div class="sidebar-tools">
+          <button class="side-btn" data-toggle-dark>${icon(state.darkMode ? 'sun' : 'moon')} <span>${state.darkMode ? 'Light mode' : 'Dark mode'}</span></button>
+          <button class="side-btn" data-open-modal="export">${icon('download')} <span>Export data</span></button>
+          <button class="side-btn" data-auth-signout><span>↩</span> <span>Sign out</span></button>
+          <div class="sidebar-foot">
+            <div class="sync-status">${escapeHtml(syncStatus)}</div>
+            ${jokeOfTheDay ? `"${escapeHtml(jokeOfTheDay)}"` : 'Everything you need to track, in one place.'}
+          </div>
         </div>
       </div>
     </div>`;
