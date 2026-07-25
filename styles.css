@@ -411,6 +411,7 @@ body {
   align-items: center;
   padding: 4px 9px;
   border-radius: 16px;
+  border: 1px solid var(--line);
   font-family: 'Poppins', sans-serif;
 }
 .icon-btn:hover {
