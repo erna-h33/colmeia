@@ -9,6 +9,11 @@ create table if not exists public.app_state (
 
 alter table public.app_state enable row level security;
 
+-- RLS policies below only take effect once the `authenticated` role also has
+-- base table privileges -- without this grant, Postgres rejects every query
+-- with "permission denied for table app_state" before RLS is even evaluated.
+grant select, insert, update, delete on public.app_state to authenticated;
+
 drop policy if exists "Users can view own app state" on public.app_state;
 create policy "Users can view own app state"
   on public.app_state
