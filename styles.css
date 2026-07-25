@@ -51,7 +51,7 @@ body {
 }
 .auth-card h1 {
   margin: 8px 0 8px;
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Analogue', sans-serif;
   font-size: var(--font-size-large);
 }
 .auth-card p {
