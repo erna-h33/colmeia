@@ -140,6 +140,7 @@ const Storage = {
   let eventDraft = null;
   let taskDraft = null;
   let noteDraft = null;
+  let categoryDraft = null;
 
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -194,6 +195,9 @@ const Storage = {
         tagsStr: tagsEl ? tagsEl.value : '',
         newCategory: newCategoryEl ? newCategoryEl.value : '',
       };
+    } else if (modal === 'category') {
+      const nameEl = document.getElementById('m-category-name');
+      categoryDraft = nameEl ? nameEl.value : '';
     }
   }
 
@@ -241,6 +245,9 @@ const Storage = {
         tagsStr: tagsEl ? tagsEl.value : '',
         newCategory: newCategoryEl ? newCategoryEl.value : '',
       };
+    } else if (modal === 'category') {
+      const nameEl = document.getElementById('m-category-name');
+      categoryDraft = nameEl ? nameEl.value : '';
     }
   }
 
@@ -981,7 +988,7 @@ const Storage = {
           <h2 class="view-title">To Do</h2>
           <div class="view-sub">Shopping lists, errands, work — split by category.</div>
         </div>
-        <button class="btn" data-open-modal="task">+ Add item</button>
+        <button class="btn" data-open-modal="category">+ Add category</button>
       </div>
       ${body}
     `;
@@ -1190,6 +1197,19 @@ const Storage = {
             ${existing ? `<button class="btn ghost" data-delete-task-inmodal="${existing.id}" style="margin-right:auto; color:var(--clay); border-color:#EAD0C4;">Delete</button>` : ''}
             <button class="btn ghost" data-close-modal>Cancel</button>
             <button class="btn" data-save-task>${existing ? 'Save changes' : 'Save'}</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    if (modal === 'category') {
+      const value = categoryDraft != null ? categoryDraft : '';
+      return `<div class="overlay" data-overlay>
+        <div class="modal" style="width:400px;">
+          <h3>Add category</h3>
+          <div class="field"><label>Category name ${requiredMark()}</label><input type="text" id="m-category-name" value="${escapeAttr(value)}" placeholder="e.g. Fitness" />${fieldError('m-category-name')}</div>
+          <div class="modal-actions">
+            <button class="btn ghost" data-close-modal>Cancel</button>
+            <button class="btn" data-save-category>Save</button>
           </div>
         </div>
       </div>`;
@@ -1455,6 +1475,7 @@ const Storage = {
           eventDraft = null;
           taskDraft = null;
           noteDraft = null;
+          categoryDraft = null;
           fieldErrors = {};
           modal = modalReturn;
           modalReturn = null;
@@ -1470,6 +1491,7 @@ const Storage = {
           eventDraft = null;
           taskDraft = null;
           noteDraft = null;
+          categoryDraft = null;
           fieldErrors = {};
           modal = modalReturn;
           modalReturn = null;
@@ -1477,15 +1499,15 @@ const Storage = {
         }),
     );
 
-    // Enter-to-save works in any of the three add/edit modals (event, task,
-    // note) -- one generic handler instead of wiring each field separately.
+    // Enter-to-save works in any of the add/edit modals (event, task, note,
+    // category) -- one generic handler instead of wiring each field separately.
     // Skipped inside a <textarea>, where Enter should insert a newline.
     const modalEl = document.querySelector('.modal');
     if (modalEl) {
       modalEl.onkeydown = (e) => {
         if (e.key !== 'Enter' || e.target.tagName === 'TEXTAREA') return;
         const saveBtn = modalEl.querySelector(
-          '[data-save-event], [data-save-task], [data-save-note]',
+          '[data-save-event], [data-save-task], [data-save-note], [data-save-category]',
         );
         if (saveBtn) {
           e.preventDefault();
@@ -1653,6 +1675,24 @@ const Storage = {
         save();
         render();
       };
+    const saveCategoryBtn = document.querySelector('[data-save-category]');
+    if (saveCategoryBtn)
+      saveCategoryBtn.onclick = () => {
+        const name = document.getElementById('m-category-name').value.trim();
+        fieldErrors = {};
+        if (!name || state.taskCategories.includes(name)) {
+          fieldErrors['m-category-name'] = true;
+          categoryDraft = name;
+          render();
+          return;
+        }
+        state.taskCategories.push(name);
+        categoryDraft = null;
+        fieldErrors = {};
+        modal = null;
+        save();
+        render();
+      };
     const categorySel = document.getElementById('m-category');
     if (categorySel)
       categorySel.onchange = () => {
@@ -1670,6 +1710,12 @@ const Storage = {
       mText.focus();
       const len = mText.value.length;
       mText.setSelectionRange(len, len);
+    }
+    const mCategoryName = document.getElementById('m-category-name');
+    if (mCategoryName) {
+      mCategoryName.focus();
+      const len = mCategoryName.value.length;
+      mCategoryName.setSelectionRange(len, len);
     }
     document.querySelectorAll('[data-delete-task-inmodal]').forEach(
       (b) =>
