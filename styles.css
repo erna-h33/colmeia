@@ -5,8 +5,8 @@
 }
 
 :root {
-  --font-size-small: 0.875rem;
-  --font-size-medium: 1rem;
+  --font-size-small: 0.75rem;
+  --font-size-medium: 0.875rem;
   --font-size-large: 1.5rem;
   --ink: #2b3a36;
   --ink-soft: #3a4c46;
