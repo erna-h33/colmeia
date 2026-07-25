@@ -366,7 +366,7 @@ body {
 }
 .event-title {
   font-weight: 600;
-  font-size: var(--font-size-small);
+  font-size: var(--font-size-medium);
 }
 .event-type {
   font-size: var(--font-size-medium);
