@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colmeia-v2';
+const CACHE_NAME = 'colmeia-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -32,13 +32,23 @@ self.addEventListener('activate', (event) => {
 // if the network request fails -- i.e. genuinely offline. This matters most
 // during active development, where a cache-first strategy would keep
 // serving stale files no matter how many times you edit and reload.
+//
+// Same-origin only: this SW re-issues intercepted requests via its own
+// fetch(), which is subject to the page's CSP connect-src. Letting it
+// touch cross-origin requests (Google Fonts, the Supabase JS CDN, the
+// Supabase API itself) means any of those not explicitly allowlisted in
+// connect-src gets silently CSP-blocked here -- breaking font loading and,
+// worse, causing the app to think Supabase failed to load and silently
+// fall back to local-only storage. Third-party requests were never part
+// of the offline-asset list below anyway, so just leave them alone.
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
   const isHttp = url.protocol === 'http:' || url.protocol === 'https:';
   const isGet = request.method === 'GET';
+  const isSameOrigin = url.origin === self.location.origin;
 
-  if (!isHttp || !isGet) return;
+  if (!isHttp || !isGet || !isSameOrigin) return;
 
   event.respondWith(
     fetch(request)
