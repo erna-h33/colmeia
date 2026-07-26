@@ -295,7 +295,13 @@ const Storage = {
         state.tasks = [];
         state.notes = [];
         state.taskCategories = ['Shopping list', 'Odds & Ends', 'Work'];
-        state.noteCategories = ['Idea', 'Link', 'Recipe', 'Gift idea', 'To read'];
+        state.noteCategories = [
+          'Idea',
+          'Link',
+          'Recipe',
+          'Gift idea',
+          'To read',
+        ];
         state.globalQuery = '';
         resetAgendaToToday();
         syncStatus =
@@ -606,7 +612,7 @@ const Storage = {
     app.className = state.darkMode ? 'dark' : '';
 
     if (!authReady) {
-      app.innerHTML = `<div class="auth-shell"><div class="auth-card"><div class="brand">Colmeia<span>.</span></div><h1>Connecting…</h1><p>Preparing your planner.</p></div></div>`;
+      app.innerHTML = `<div class="auth-shell"><div class="auth-card"><div class="brand">Beehive<span>.</span></div><h1>Connecting…</h1><p>Preparing your planner.</p></div></div>`;
       return;
     }
 
@@ -624,7 +630,7 @@ const Storage = {
     const openTasks = state.tasks.filter((t) => !t.done).length;
     return `
     <div class="sidebar">
-      <div class="brand">Colmeia<span>.</span></div>
+      <div class="brand">Beehive<span>.</span></div>
       <input class="global-search" placeholder="Search everything…" value="${escapeAttr(state.globalQuery || '')}" data-global-search />
       <div class="nav-scroll">
         <button class="nav-btn ${state.view === 'agenda' && !state.globalQuery ? 'active' : ''}" data-view="agenda">
