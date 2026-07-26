@@ -137,10 +137,10 @@ const Storage = {
   // "confirmed it's OK to replace local guest data with this account's
   // cloud data" during a sign-in. Null the rest of the time.
   let guestDataPendingReplace = null;
-  // Id of the event awaiting the "you changed the date/time, re-export to
-  // your calendar?" prompt (modal === 'reexport-ics'). Null the rest of the
-  // time.
-  let reExportEventId = null;
+  // Id of the event awaiting the "you changed the date/time, add it to
+  // Google Calendar again?" prompt (modal === 'readd-gcal'). Null the rest
+  // of the time.
+  let reAddGcalEventId = null;
   let syncStatus = 'Ready';
   let jokeOfTheDay = null;
 
@@ -172,14 +172,12 @@ const Storage = {
       const dateEl = document.getElementById('m-date');
       const timeEl = document.getElementById('m-time');
       const repeatEl = document.getElementById('m-repeat');
-      const alertEl = document.getElementById('m-alert');
       eventDraft = {
         title: titleEl ? titleEl.value : '',
         type: typeEl ? typeEl.value : '',
         date: dateEl ? dateEl.value : '',
         time: timeEl ? timeEl.value : '',
         repeat: repeatEl ? repeatEl.value : 'none',
-        alert: alertEl ? alertEl.checked : true,
       };
     } else if (modal === 'task') {
       const textEl = document.getElementById('m-text');
@@ -222,14 +220,12 @@ const Storage = {
       const dateEl = document.getElementById('m-date');
       const timeEl = document.getElementById('m-time');
       const repeatEl = document.getElementById('m-repeat');
-      const alertEl = document.getElementById('m-alert');
       eventDraft = {
         title: titleEl ? titleEl.value : '',
         type: typeEl ? typeEl.value : '',
         date: dateEl ? dateEl.value : '',
         time: timeEl ? timeEl.value : '',
         repeat: repeatEl ? repeatEl.value : 'none',
-        alert: alertEl ? alertEl.checked : true,
       };
     } else if (modal === 'task') {
       const textEl = document.getElementById('m-text');
@@ -493,104 +489,59 @@ const Storage = {
       (rep === 'daily' ? 'daily' : rep === 'weekly' ? 'weekly' : 'monthly')
     );
   }
-  // ---------- calendar export (.ics) ----------
-  // Reminders live on the phone's own calendar app instead of a real push
-  // notification system (this is a static site with no server to schedule
-  // sends from) -- exporting an event hands the actual reminding off to
-  // whatever calendar the person already has, which does it reliably even
-  // fully offline.
-  function icsEscapeText(s) {
-    return (s || '')
-      .replace(/\\/g, '\\\\')
-      .replace(/;/g, '\\;')
-      .replace(/,/g, '\\,')
-      .replace(/\n/g, '\\n');
-  }
-  function icsPad(n) {
+  // ---------- Add to Google Calendar ----------
+  // Reminders live on Google Calendar instead of a real push notification
+  // system (this is a static site with no server to schedule sends from) --
+  // this hands the actual reminding off to a calendar the person already
+  // has, which does it reliably even when Beehive itself isn't open.
+  //
+  // This is a plain "quick add" link (calendar.google.com/render), not the
+  // real Google Calendar API -- no OAuth, no server, nothing to set up. The
+  // tradeoff: it can only ever CREATE an event, never edit one it already
+  // created. If the date/time changes later, clicking it again adds a
+  // second entry rather than moving the first one -- see the re-add prompt
+  // below, which says as much.
+  function gcalPad(n) {
     return String(n).padStart(2, '0');
   }
-  function icsUtcStamp(d) {
-    return (
-      d.getUTCFullYear() +
-      icsPad(d.getUTCMonth() + 1) +
-      icsPad(d.getUTCDate()) +
-      'T' +
-      icsPad(d.getUTCHours()) +
-      icsPad(d.getUTCMinutes()) +
-      icsPad(d.getUTCSeconds()) +
-      'Z'
-    );
-  }
-  function buildIcs(ev) {
+  function googleCalendarUrl(ev) {
     const [y, mo, d] = ev.date.split('-').map(Number);
-    let dtStartLine, dtEndLine;
+    let datesParam;
+    let ctz = null;
     if (ev.time) {
       const [hh, mm] = ev.time.split(':').map(Number);
-      const start = `${y}${icsPad(mo)}${icsPad(d)}T${icsPad(hh)}${icsPad(mm)}00`;
+      const start = `${y}${gcalPad(mo)}${gcalPad(d)}T${gcalPad(hh)}${gcalPad(mm)}00`;
       const endDate = new Date(y, mo - 1, d, hh, mm);
       endDate.setHours(endDate.getHours() + 1);
-      const end = `${endDate.getFullYear()}${icsPad(endDate.getMonth() + 1)}${icsPad(endDate.getDate())}T${icsPad(endDate.getHours())}${icsPad(endDate.getMinutes())}00`;
-      dtStartLine = `DTSTART:${start}`;
-      dtEndLine = `DTEND:${end}`;
+      const end = `${endDate.getFullYear()}${gcalPad(endDate.getMonth() + 1)}${gcalPad(endDate.getDate())}T${gcalPad(endDate.getHours())}${gcalPad(endDate.getMinutes())}00`;
+      datesParam = `${start}/${end}`;
+      // No Z suffix -- these are plain local wall-clock digits (the app has
+      // no timezone concept at all), so tell Google which timezone to read
+      // them in rather than letting it assume UTC.
+      try {
+        ctz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      } catch (e) {
+        ctz = null;
+      }
     } else {
-      const start = `${y}${icsPad(mo)}${icsPad(d)}`;
+      const start = `${y}${gcalPad(mo)}${gcalPad(d)}`;
       const nextDay = new Date(y, mo - 1, d);
       nextDay.setDate(nextDay.getDate() + 1);
-      const end = `${nextDay.getFullYear()}${icsPad(nextDay.getMonth() + 1)}${icsPad(nextDay.getDate())}`;
-      dtStartLine = `DTSTART;VALUE=DATE:${start}`;
-      dtEndLine = `DTEND;VALUE=DATE:${end}`;
+      const end = `${nextDay.getFullYear()}${gcalPad(nextDay.getMonth() + 1)}${gcalPad(nextDay.getDate())}`;
+      datesParam = `${start}/${end}`;
     }
-    const lines = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Beehive//Planner//EN',
-      'CALSCALE:GREGORIAN',
-      'BEGIN:VEVENT',
-      `UID:${ev.id}@beehive-app`,
-      `DTSTAMP:${icsUtcStamp(new Date())}`,
-      dtStartLine,
-      dtEndLine,
-      `SUMMARY:${icsEscapeText(ev.title)}`,
-    ];
-    if (ev.type) lines.push(`DESCRIPTION:${icsEscapeText(ev.type)}`);
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: ev.title,
+      dates: datesParam,
+    });
+    if (ev.type) params.set('details', ev.type);
+    if (ctz) params.set('ctz', ctz);
     const freq = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY' }[
       ev.repeat
     ];
-    if (freq) lines.push(`RRULE:FREQ=${freq}`);
-    if (ev.alert) {
-      lines.push(
-        'BEGIN:VALARM',
-        'ACTION:DISPLAY',
-        'DESCRIPTION:Reminder',
-        'TRIGGER:PT0M',
-        'END:VALARM',
-      );
-    }
-    lines.push('END:VEVENT', 'END:VCALENDAR');
-    return lines.join('\r\n');
-  }
-  function downloadIcs(ev) {
-    try {
-      const blob = new Blob([buildIcs(ev)], {
-        type: 'text/calendar;charset=utf-8',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const slug =
-        (ev.title || 'event')
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-          .slice(0, 40) || 'event';
-      a.download = `${slug}.ics`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      // Download blocked or unsupported -- nothing else to fall back to.
-    }
+    if (freq) params.set('recur', `RRULE:FREQ=${freq}`);
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
   }
   function priorityDot(p) {
     return `<span class="prio-dot ${p || 'med'}"></span>`;
@@ -931,13 +882,13 @@ const Storage = {
           <div class="event-time">${ev.time || '--:--'}</div>
           <div style="flex:1">
             <div class="event-title">${escapeHtml(ev.title)}</div>
-            <div class="event-type">${escapeHtml(ev.type)}${ev.alert ? ' · 🔔 reminder on' : ''}${repeatLabel(ev)}</div>
+            <div class="event-type">${escapeHtml(ev.type)}${repeatLabel(ev)}</div>
           </div>
           ${badge.label ? `<div class="badge ${badge.cls}">${badge.label}</div>` : ''}
         </div>
         <div class="row-actions">
           <button class="icon-btn" data-edit-event="${ev.id}">✎ Edit</button>
-          <button class="icon-btn" data-export-ics="${ev.id}">📅 Add to calendar</button>
+          <a class="icon-btn" href="${escapeAttr(googleCalendarUrl(ev))}" target="_blank" rel="noopener" data-gcal-link="${ev.id}">📅 Add to Google Calendar</a>
           ${!isRecurring ? `<button class="icon-btn" data-snooze-event="${ev.id}">⏰ Snooze +1d</button>` : ''}
           <button class="icon-btn danger" data-del-event="${ev.id}">Delete</button>
         </div>
@@ -1240,7 +1191,6 @@ const Storage = {
               date: existing.date,
               time: existing.time || '',
               repeat: existing.repeat || 'none',
-              alert: existing.alert,
             }
           : null);
       const defaultDate = src ? src.date : state.selectedDate;
@@ -1275,7 +1225,6 @@ const Storage = {
               ${repeats.map(([v, l]) => `<option value="${v}" ${src && (src.repeat || 'none') === v ? 'selected' : ''}>${l}</option>`).join('')}
             </select>
           </div>
-          <div class="toggle-row"><input type="checkbox" id="m-alert" ${!src || src.alert ? 'checked' : ''} /><label for="m-alert">Remind me</label></div>
           <div class="modal-actions">
             ${existing ? `<button class="btn ghost" data-delete-event-inmodal="${existing.id}" style="margin-right:auto; color:var(--clay); border-color:#EAD0C4;">Delete</button>` : ''}
             <button class="btn ghost" data-close-modal>Cancel</button>
@@ -1284,8 +1233,8 @@ const Storage = {
         </div>
       </div>`;
     }
-    if (modal === 'reexport-ics') {
-      const ev = state.events.find((e) => e.id === reExportEventId);
+    if (modal === 'readd-gcal') {
+      const ev = state.events.find((e) => e.id === reAddGcalEventId);
       if (!ev) {
         modal = modalReturn;
         modalReturn = null;
@@ -1293,11 +1242,11 @@ const Storage = {
       }
       return `<div class="overlay" data-overlay>
         <div class="modal" style="width:420px;">
-          <h3>Update your calendar?</h3>
-          <p style="margin:0 0 16px 0; color:var(--muted);">You changed the date or time for "<strong>${escapeHtml(ev.title)}</strong>", which you'd already added to your calendar. Re-export it so your calendar app has the new date/time.</p>
+          <h3>Update Google Calendar?</h3>
+          <p style="margin:0 0 16px 0; color:var(--muted);">This adds a new entry for "<strong>${escapeHtml(ev.title)}</strong>" -- delete the old one yourself.</p>
           <div class="modal-actions">
-            <button class="btn ghost" data-ics-dismiss>Not now</button>
-            <button class="btn" data-ics-reexport>Re-export</button>
+            <button class="btn ghost" data-gcal-dismiss>Not now</button>
+            <button class="btn" data-gcal-readd>Add again</button>
           </div>
         </div>
       </div>`;
@@ -1740,11 +1689,11 @@ const Storage = {
     // Same idea as above -- if the re-export prompt gets dismissed via the
     // overlay/close button instead of its own buttons, still acknowledge
     // the mismatch (stop nagging) rather than leaving it half-resolved.
-    const abandonPendingIcsReexport = () => {
-      if (!reExportEventId) return;
-      const ev = state.events.find((e) => e.id === reExportEventId);
-      if (ev) ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
-      reExportEventId = null;
+    const abandonPendingGcalReadd = () => {
+      if (!reAddGcalEventId) return;
+      const ev = state.events.find((e) => e.id === reAddGcalEventId);
+      if (ev) ev.gcalAddedAt = { date: ev.date, time: ev.time || '' };
+      reAddGcalEventId = null;
       save();
     };
     const overlay = document.querySelector('[data-overlay]');
@@ -1752,7 +1701,7 @@ const Storage = {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
           abandonPendingReplace();
-          abandonPendingIcsReexport();
+          abandonPendingGcalReadd();
           editingEventId = null;
           editingTaskId = null;
           editingNoteId = null;
@@ -1770,7 +1719,7 @@ const Storage = {
       (b) =>
         (b.onclick = () => {
           abandonPendingReplace();
-          abandonPendingIcsReexport();
+          abandonPendingGcalReadd();
           editingEventId = null;
           editingTaskId = null;
           editingNoteId = null;
@@ -1825,30 +1774,29 @@ const Storage = {
         const type = document.getElementById('m-type').value;
         const time = document.getElementById('m-time').value;
         const repeat = document.getElementById('m-repeat').value;
-        const alertOn = document.getElementById('m-alert').checked;
 
         fieldErrors = {};
         if (!title) fieldErrors['m-title'] = true;
         if (!date) fieldErrors['m-date'] = true;
         if (Object.keys(fieldErrors).length) {
-          eventDraft = { title, type, date, time, repeat, alert: alertOn };
+          eventDraft = { title, type, date, time, repeat };
           render();
           return;
         }
 
-        const data = { title, type, date, time, alert: alertOn, repeat };
+        const data = { title, type, date, time, repeat };
         const wasEdit = !!editingEventId;
         let promptReexport = false;
         if (wasEdit) {
           const ev = state.events.find((e) => e.id === editingEventId);
-          const prevExport = ev.icsExportedAt;
+          const prevExport = ev.gcalAddedAt;
           Object.assign(ev, data);
           if (
             prevExport &&
             (prevExport.date !== date || (prevExport.time || '') !== (time || ''))
           ) {
             promptReexport = true;
-            reExportEventId = ev.id;
+            reAddGcalEventId = ev.id;
           }
         } else {
           state.events.push({ id: uid(), ...data });
@@ -1857,7 +1805,7 @@ const Storage = {
         eventDraft = null;
         fieldErrors = {};
         if (promptReexport) {
-          modal = 'reexport-ics';
+          modal = 'readd-gcal';
         } else {
           modal = modalReturn;
           modalReturn = null;
@@ -1924,41 +1872,43 @@ const Storage = {
           render();
         }),
     );
-    document.querySelectorAll('[data-export-ics]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          const ev = state.events.find((e) => e.id === b.dataset.exportIcs);
+    // The link itself does the navigating (href + target="_blank") -- this
+    // just records that it was clicked, so a later date/time edit knows to
+    // offer the re-add prompt.
+    document.querySelectorAll('[data-gcal-link]').forEach(
+      (a) =>
+        (a.onclick = () => {
+          const ev = state.events.find((e) => e.id === a.dataset.gcalLink);
           if (!ev) return;
-          downloadIcs(ev);
-          ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
+          ev.gcalAddedAt = { date: ev.date, time: ev.time || '' };
           save();
         }),
     );
-    const icsReexportBtn = document.querySelector('[data-ics-reexport]');
-    if (icsReexportBtn)
-      icsReexportBtn.onclick = () => {
-        const ev = state.events.find((e) => e.id === reExportEventId);
+    const gcalReaddBtn = document.querySelector('[data-gcal-readd]');
+    if (gcalReaddBtn)
+      gcalReaddBtn.onclick = () => {
+        const ev = state.events.find((e) => e.id === reAddGcalEventId);
         if (ev) {
-          downloadIcs(ev);
-          ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
+          window.open(googleCalendarUrl(ev), '_blank', 'noopener');
+          ev.gcalAddedAt = { date: ev.date, time: ev.time || '' };
         }
-        reExportEventId = null;
+        reAddGcalEventId = null;
         modal = modalReturn;
         modalReturn = null;
         save();
         render();
       };
-    const icsDismissBtn = document.querySelector('[data-ics-dismiss]');
-    if (icsDismissBtn)
-      icsDismissBtn.onclick = () => {
-        const ev = state.events.find((e) => e.id === reExportEventId);
+    const gcalDismissBtn = document.querySelector('[data-gcal-dismiss]');
+    if (gcalDismissBtn)
+      gcalDismissBtn.onclick = () => {
+        const ev = state.events.find((e) => e.id === reAddGcalEventId);
         if (ev) {
           // Acknowledge and stop nagging about this same mismatch -- the
           // next prompt only fires if the date/time changes again from
-          // here, even though the calendar app itself wasn't updated.
-          ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
+          // here, even though Google Calendar itself wasn't updated.
+          ev.gcalAddedAt = { date: ev.date, time: ev.time || '' };
         }
-        reExportEventId = null;
+        reAddGcalEventId = null;
         modal = modalReturn;
         modalReturn = null;
         save();

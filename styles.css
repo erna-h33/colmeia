@@ -426,6 +426,7 @@ body {
   border-radius: 16px;
   border: 1px solid var(--line);
   font-family: 'Poppins', sans-serif;
+  text-decoration: none;
 }
 .icon-btn:hover {
   background: transparent;
@@ -765,14 +766,6 @@ body {
   margin-top: 16px;
   flex-wrap: wrap;
 }
-.toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--font-size-medium);
-  margin-bottom: 12px;
-}
-
 .empty {
   text-align: center;
   padding: 40px 10px;
