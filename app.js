@@ -445,11 +445,6 @@ const Storage = {
     return new Date(y, m - 1, d);
   }
 
-  function addDays(dateStr, n) {
-    const d = parseLocalDate(dateStr);
-    d.setDate(d.getDate() + n);
-    return localDateStr(d);
-  }
   function diffDaysBetween(d1, d2) {
     return Math.round(
       (parseLocalDate(d2).getTime() - parseLocalDate(d1).getTime()) / 86400000,
@@ -875,7 +870,6 @@ const Storage = {
 
   function eventCard(ev) {
     const badge = eventBadge(ev);
-    const isRecurring = ev.repeat && ev.repeat !== 'none';
     return `
       <div class="card">
         <div class="event-row">
@@ -889,7 +883,6 @@ const Storage = {
         <div class="row-actions">
           <button class="icon-btn" data-edit-event="${ev.id}">✎ Edit</button>
           <a class="icon-btn" href="${escapeAttr(googleCalendarUrl(ev))}" target="_blank" rel="noopener" data-gcal-link="${ev.id}">📅 Add to Google Calendar</a>
-          ${!isRecurring ? `<button class="icon-btn" data-snooze-event="${ev.id}">⏰ Snooze +1d</button>` : ''}
           <button class="icon-btn danger" data-del-event="${ev.id}">Delete</button>
         </div>
       </div>`;
@@ -1847,17 +1840,6 @@ const Storage = {
           fieldErrors = {};
           modalReturn = modal;
           modal = 'event';
-          render();
-        }),
-    );
-    document.querySelectorAll('[data-snooze-event]').forEach(
-      (b) =>
-        (b.onclick = () => {
-          const ev = state.events.find((x) => x.id === b.dataset.snoozeEvent);
-          if (!ev) return;
-          if (ev.repeat && ev.repeat !== 'none') return; // guarded: button isn't shown for recurring events
-          ev.date = addDays(ev.date, 1);
-          save();
           render();
         }),
     );
