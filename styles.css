@@ -137,6 +137,18 @@ body {
 .brand span {
   color: var(--amber);
 }
+/* Transparent on desktop, same as .nav-scroll -- .brand renders as a normal
+   direct child of .sidebar, unaffected by this wrapper existing. The
+   duplicate account button inside it only exists for the mobile top bar. */
+.mobile-account-row {
+  display: contents;
+}
+.side-btn.account-btn-mobile {
+  display: none;
+}
+.side-btn.darkmode-btn-mobile {
+  display: none;
+}
 .global-search {
   width: 100%;
   padding: 9px 11px;
@@ -971,10 +983,45 @@ body {
     padding: 10px 10px 0 10px;
     gap: 6px;
   }
+  .mobile-account-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
+  }
   .brand {
     display: block;
-    text-align: center;
-    padding: 4px 0 6px 0;
+    text-align: left;
+    padding: 4px 0;
+  }
+  .side-btn.account-btn-mobile {
+    display: inline-flex;
+    width: auto;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  /* Icon-only circular button, right next to the account button -- pushed
+     (along with everything after it) to the row's right edge via
+     margin-left: auto, so the logo stays pinned left. */
+  .side-btn.darkmode-btn-mobile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  /* The original instances (desktop's .sidebar-tools list) would otherwise
+     also show up in the mobile nav-scroll strip -- now redundant since
+     these live in the top bar instead. */
+  .side-btn.account-btn-original,
+  .side-btn.darkmode-btn-original {
+    display: none;
   }
   .global-search {
     display: none;

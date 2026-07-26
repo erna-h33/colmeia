@@ -625,12 +625,42 @@ const Storage = {
     bindEvents();
   }
 
+  // Rendered twice: once in its normal spot in .sidebar-tools (desktop, and
+  // the mobile nav-scroll strip), and once as a duplicate paired with the
+  // logo in .mobile-account-row (phones only). CSS shows exactly one of the
+  // two per breakpoint -- see .account-btn-original / .account-btn-mobile.
+  // Both carry the same data-attributes, so the existing click handlers
+  // (already using querySelectorAll) wire up both automatically.
+  function accountButton(variant) {
+    const extraClass = variant === 'mobile' ? 'account-btn-mobile' : 'account-btn-original';
+    if (isLocalMode) {
+      return `<button class="side-btn ${extraClass}" data-open-modal="auth"><span>🔐</span> <span>Sign in to save</span></button>`;
+    }
+    return `<button class="side-btn ${extraClass}" data-auth-signout><span class="avatar" title="${escapeAttr(authUser.email || '')}">${escapeHtml((authUser.email || '?').charAt(0).toUpperCase())}</span> <span>Sign out</span></button>`;
+  }
+
+  // Same rendered-twice pattern as accountButton() above. The mobile copy
+  // is icon-only (no "Light mode"/"Dark mode" label) since it sits in the
+  // cramped top bar next to the logo; the desktop/original copy keeps its
+  // label.
+  function darkModeButton(variant) {
+    const icon_ = icon(state.darkMode ? 'sun' : 'moon');
+    if (variant === 'mobile') {
+      return `<button class="side-btn darkmode-btn-mobile" data-toggle-dark title="${state.darkMode ? 'Light mode' : 'Dark mode'}">${icon_}</button>`;
+    }
+    return `<button class="side-btn darkmode-btn-original" data-toggle-dark>${icon_} <span>${state.darkMode ? 'Light mode' : 'Dark mode'}</span></button>`;
+  }
+
   function sidebar() {
     const eventCount = state.events.length;
     const openTasks = state.tasks.filter((t) => !t.done).length;
     return `
     <div class="sidebar">
-      <div class="brand">Beehive<span>.</span></div>
+      <div class="mobile-account-row">
+        <div class="brand">Beehive<span>.</span></div>
+        ${darkModeButton('mobile')}
+        ${accountButton('mobile')}
+      </div>
       <input class="global-search" placeholder="Search everything…" value="${escapeAttr(state.globalQuery || '')}" data-global-search />
       <div class="nav-scroll">
         <button class="nav-btn ${state.view === 'agenda' && !state.globalQuery ? 'active' : ''}" data-view="agenda">
@@ -643,13 +673,9 @@ const Storage = {
           ${icon('fileText')} <span>Notes</span> <span class="count">${state.notes.length}</span>
         </button>
         <div class="sidebar-tools">
-          <button class="side-btn" data-toggle-dark>${icon(state.darkMode ? 'sun' : 'moon')} <span>${state.darkMode ? 'Light mode' : 'Dark mode'}</span></button>
+          ${darkModeButton('original')}
           <button class="side-btn" data-open-modal="export">${icon('download')} <span>Export data</span></button>
-          ${
-            isLocalMode
-              ? `<button class="side-btn" data-open-modal="auth"><span>🔐</span> <span>Sign in to save</span></button>`
-              : `<button class="side-btn" data-auth-signout><span class="avatar" title="${escapeAttr(authUser.email || '')}">${escapeHtml((authUser.email || '?').charAt(0).toUpperCase())}</span> <span>Sign out</span></button>`
-          }
+          ${accountButton('original')}
           <div class="sidebar-foot">
             <div class="sync-status">${escapeHtml(syncStatus)}</div>
             ${jokeOfTheDay ? `"${escapeHtml(jokeOfTheDay)}"` : 'Everything you need to track, in one place.'}
@@ -1000,7 +1026,7 @@ const Storage = {
     );
     let grid = '';
     if (filtered.length === 0) {
-      grid = `<div class="empty">${state.notes.length ? 'No matches. Try another search term, category, or tag.' : 'Save an idea or a link here so it never gets buried in a chat thread.'}</div>`;
+      grid = `<div class="empty">${state.notes.length ? 'No matches. Try another search term, category, or tag.' : 'Save an idea or a link here so it is easy to find and manage.'}</div>`;
     } else {
       grid =
         `<div class="notes-grid">` +
@@ -1339,8 +1365,10 @@ const Storage = {
 
   // ---------- events ----------
   function bindEvents() {
-    const signOutBtn = document.querySelector('[data-auth-signout]');
-    if (signOutBtn) {
+    // querySelectorAll -- the button is rendered twice (once for desktop,
+    // once duplicated into the mobile top bar), only one of which is
+    // visible per breakpoint, but both need the click handler wired up.
+    document.querySelectorAll('[data-auth-signout]').forEach((signOutBtn) => {
       // Deliberately doesn't set isLocalMode/authUser/call load() itself --
       // signOut() fires the onAuthStateChange listener in initAuth(), which
       // is the single source of truth for reacting to that. This button
@@ -1350,7 +1378,7 @@ const Storage = {
         authError = '';
         await supabaseClient.auth.signOut();
       };
-    }
+    });
 
     // ---- sign in / sign up (guest -> account) ----
     const authSubmitBtn = document.querySelector('[data-auth-submit]');
