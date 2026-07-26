@@ -286,6 +286,17 @@ const Storage = {
         syncStatus =
           authUser && !isLocalMode ? 'Loaded from cloud' : 'Loaded locally';
       } else {
+        // Confirmed there's genuinely nothing saved for this identity (as
+        // opposed to a fetch error, handled below) -- clear out whatever
+        // the previous identity had in memory instead of leaving it on
+        // screen. This is what makes signing out (into a guest session
+        // with no local data yet) actually look signed out.
+        state.events = [];
+        state.tasks = [];
+        state.notes = [];
+        state.taskCategories = ['Shopping list', 'Odds & Ends', 'Work'];
+        state.noteCategories = ['Idea', 'Link', 'Recipe', 'Gift idea', 'To read'];
+        state.globalQuery = '';
         resetAgendaToToday();
         syncStatus =
           authUser && !isLocalMode
@@ -631,7 +642,7 @@ const Storage = {
           ${
             isLocalMode
               ? `<button class="side-btn" data-open-modal="auth"><span>🔐</span> <span>Sign in to save</span></button>`
-              : `<button class="side-btn" data-auth-signout><span>↩</span> <span>Sign out</span></button>`
+              : `<button class="side-btn" data-auth-signout><span class="avatar" title="${escapeAttr(authUser.email || '')}">${escapeHtml((authUser.email || '?').charAt(0).toUpperCase())}</span> <span>Sign out</span></button>`
           }
           <div class="sidebar-foot">
             <div class="sync-status">${escapeHtml(syncStatus)}</div>

@@ -226,6 +226,19 @@ body {
   background: rgba(237, 227, 200, 0.1);
   border-color: var(--amber);
 }
+.avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--amber);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: var(--font-size-small);
+  flex-shrink: 0;
+}
 .sidebar-foot {
   font-size: var(--font-size-medium);
   color: #9c9375;
