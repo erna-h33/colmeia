@@ -137,6 +137,10 @@ const Storage = {
   // "confirmed it's OK to replace local guest data with this account's
   // cloud data" during a sign-in. Null the rest of the time.
   let guestDataPendingReplace = null;
+  // Id of the event awaiting the "you changed the date/time, re-export to
+  // your calendar?" prompt (modal === 'reexport-ics'). Null the rest of the
+  // time.
+  let reExportEventId = null;
   let syncStatus = 'Ready';
   let jokeOfTheDay = null;
 
@@ -489,6 +493,105 @@ const Storage = {
       (rep === 'daily' ? 'daily' : rep === 'weekly' ? 'weekly' : 'monthly')
     );
   }
+  // ---------- calendar export (.ics) ----------
+  // Reminders live on the phone's own calendar app instead of a real push
+  // notification system (this is a static site with no server to schedule
+  // sends from) -- exporting an event hands the actual reminding off to
+  // whatever calendar the person already has, which does it reliably even
+  // fully offline.
+  function icsEscapeText(s) {
+    return (s || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/;/g, '\\;')
+      .replace(/,/g, '\\,')
+      .replace(/\n/g, '\\n');
+  }
+  function icsPad(n) {
+    return String(n).padStart(2, '0');
+  }
+  function icsUtcStamp(d) {
+    return (
+      d.getUTCFullYear() +
+      icsPad(d.getUTCMonth() + 1) +
+      icsPad(d.getUTCDate()) +
+      'T' +
+      icsPad(d.getUTCHours()) +
+      icsPad(d.getUTCMinutes()) +
+      icsPad(d.getUTCSeconds()) +
+      'Z'
+    );
+  }
+  function buildIcs(ev) {
+    const [y, mo, d] = ev.date.split('-').map(Number);
+    let dtStartLine, dtEndLine;
+    if (ev.time) {
+      const [hh, mm] = ev.time.split(':').map(Number);
+      const start = `${y}${icsPad(mo)}${icsPad(d)}T${icsPad(hh)}${icsPad(mm)}00`;
+      const endDate = new Date(y, mo - 1, d, hh, mm);
+      endDate.setHours(endDate.getHours() + 1);
+      const end = `${endDate.getFullYear()}${icsPad(endDate.getMonth() + 1)}${icsPad(endDate.getDate())}T${icsPad(endDate.getHours())}${icsPad(endDate.getMinutes())}00`;
+      dtStartLine = `DTSTART:${start}`;
+      dtEndLine = `DTEND:${end}`;
+    } else {
+      const start = `${y}${icsPad(mo)}${icsPad(d)}`;
+      const nextDay = new Date(y, mo - 1, d);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const end = `${nextDay.getFullYear()}${icsPad(nextDay.getMonth() + 1)}${icsPad(nextDay.getDate())}`;
+      dtStartLine = `DTSTART;VALUE=DATE:${start}`;
+      dtEndLine = `DTEND;VALUE=DATE:${end}`;
+    }
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Beehive//Planner//EN',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `UID:${ev.id}@beehive-app`,
+      `DTSTAMP:${icsUtcStamp(new Date())}`,
+      dtStartLine,
+      dtEndLine,
+      `SUMMARY:${icsEscapeText(ev.title)}`,
+    ];
+    if (ev.type) lines.push(`DESCRIPTION:${icsEscapeText(ev.type)}`);
+    const freq = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY' }[
+      ev.repeat
+    ];
+    if (freq) lines.push(`RRULE:FREQ=${freq}`);
+    if (ev.alert) {
+      lines.push(
+        'BEGIN:VALARM',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:Reminder',
+        'TRIGGER:PT0M',
+        'END:VALARM',
+      );
+    }
+    lines.push('END:VEVENT', 'END:VCALENDAR');
+    return lines.join('\r\n');
+  }
+  function downloadIcs(ev) {
+    try {
+      const blob = new Blob([buildIcs(ev)], {
+        type: 'text/calendar;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const slug =
+        (ev.title || 'event')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 40) || 'event';
+      a.download = `${slug}.ics`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // Download blocked or unsupported -- nothing else to fall back to.
+    }
+  }
   function priorityDot(p) {
     return `<span class="prio-dot ${p || 'med'}"></span>`;
   }
@@ -834,6 +937,7 @@ const Storage = {
         </div>
         <div class="row-actions">
           <button class="icon-btn" data-edit-event="${ev.id}">✎ Edit</button>
+          <button class="icon-btn" data-export-ics="${ev.id}">📅 Add to calendar</button>
           ${!isRecurring ? `<button class="icon-btn" data-snooze-event="${ev.id}">⏰ Snooze +1d</button>` : ''}
           <button class="icon-btn danger" data-del-event="${ev.id}">Delete</button>
         </div>
@@ -1176,6 +1280,24 @@ const Storage = {
             ${existing ? `<button class="btn ghost" data-delete-event-inmodal="${existing.id}" style="margin-right:auto; color:var(--clay); border-color:#EAD0C4;">Delete</button>` : ''}
             <button class="btn ghost" data-close-modal>Cancel</button>
             <button class="btn" data-save-event>${existing ? 'Save changes' : 'Save'}</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    if (modal === 'reexport-ics') {
+      const ev = state.events.find((e) => e.id === reExportEventId);
+      if (!ev) {
+        modal = modalReturn;
+        modalReturn = null;
+        return renderModal();
+      }
+      return `<div class="overlay" data-overlay>
+        <div class="modal" style="width:420px;">
+          <h3>Update your calendar?</h3>
+          <p style="margin:0 0 16px 0; color:var(--muted);">You changed the date or time for "<strong>${escapeHtml(ev.title)}</strong>", which you'd already added to your calendar. Re-export it so your calendar app has the new date/time.</p>
+          <div class="modal-actions">
+            <button class="btn ghost" data-ics-dismiss>Not now</button>
+            <button class="btn" data-ics-reexport>Re-export</button>
           </div>
         </div>
       </div>`;
@@ -1615,11 +1737,22 @@ const Storage = {
       guestDataPendingReplace = null;
       authFlowInProgress = false;
     };
+    // Same idea as above -- if the re-export prompt gets dismissed via the
+    // overlay/close button instead of its own buttons, still acknowledge
+    // the mismatch (stop nagging) rather than leaving it half-resolved.
+    const abandonPendingIcsReexport = () => {
+      if (!reExportEventId) return;
+      const ev = state.events.find((e) => e.id === reExportEventId);
+      if (ev) ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
+      reExportEventId = null;
+      save();
+    };
     const overlay = document.querySelector('[data-overlay]');
     if (overlay)
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
           abandonPendingReplace();
+          abandonPendingIcsReexport();
           editingEventId = null;
           editingTaskId = null;
           editingNoteId = null;
@@ -1637,6 +1770,7 @@ const Storage = {
       (b) =>
         (b.onclick = () => {
           abandonPendingReplace();
+          abandonPendingIcsReexport();
           editingEventId = null;
           editingTaskId = null;
           editingNoteId = null;
@@ -1704,17 +1838,30 @@ const Storage = {
 
         const data = { title, type, date, time, alert: alertOn, repeat };
         const wasEdit = !!editingEventId;
+        let promptReexport = false;
         if (wasEdit) {
           const ev = state.events.find((e) => e.id === editingEventId);
+          const prevExport = ev.icsExportedAt;
           Object.assign(ev, data);
+          if (
+            prevExport &&
+            (prevExport.date !== date || (prevExport.time || '') !== (time || ''))
+          ) {
+            promptReexport = true;
+            reExportEventId = ev.id;
+          }
         } else {
           state.events.push({ id: uid(), ...data });
         }
         editingEventId = null;
         eventDraft = null;
         fieldErrors = {};
-        modal = modalReturn;
-        modalReturn = null;
+        if (promptReexport) {
+          modal = 'reexport-ics';
+        } else {
+          modal = modalReturn;
+          modalReturn = null;
+        }
         save();
         render();
       };
@@ -1777,6 +1924,46 @@ const Storage = {
           render();
         }),
     );
+    document.querySelectorAll('[data-export-ics]').forEach(
+      (b) =>
+        (b.onclick = () => {
+          const ev = state.events.find((e) => e.id === b.dataset.exportIcs);
+          if (!ev) return;
+          downloadIcs(ev);
+          ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
+          save();
+        }),
+    );
+    const icsReexportBtn = document.querySelector('[data-ics-reexport]');
+    if (icsReexportBtn)
+      icsReexportBtn.onclick = () => {
+        const ev = state.events.find((e) => e.id === reExportEventId);
+        if (ev) {
+          downloadIcs(ev);
+          ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
+        }
+        reExportEventId = null;
+        modal = modalReturn;
+        modalReturn = null;
+        save();
+        render();
+      };
+    const icsDismissBtn = document.querySelector('[data-ics-dismiss]');
+    if (icsDismissBtn)
+      icsDismissBtn.onclick = () => {
+        const ev = state.events.find((e) => e.id === reExportEventId);
+        if (ev) {
+          // Acknowledge and stop nagging about this same mismatch -- the
+          // next prompt only fires if the date/time changes again from
+          // here, even though the calendar app itself wasn't updated.
+          ev.icsExportedAt = { date: ev.date, time: ev.time || '' };
+        }
+        reExportEventId = null;
+        modal = modalReturn;
+        modalReturn = null;
+        save();
+        render();
+      };
 
     // ---- tasks ----
     const saveTaskBtn = document.querySelector('[data-save-task]');
