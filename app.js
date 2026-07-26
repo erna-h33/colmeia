@@ -128,6 +128,15 @@ const Storage = {
   let authMessage = '';
   let authEmail = '';
   let authPassword = '';
+  // Set while a sign-in/sign-up call is in flight, so the onAuthStateChange
+  // listener below knows to stay out of the way -- the submit handler is
+  // already deciding what to do with the result (including, for sign-in,
+  // possibly pausing to ask before replacing local guest data).
+  let authFlowInProgress = false;
+  // Holds the freshly-authenticated user between "credentials verified" and
+  // "confirmed it's OK to replace local guest data with this account's
+  // cloud data" during a sign-in. Null the rest of the time.
+  let guestDataPendingReplace = null;
   let syncStatus = 'Ready';
   let jokeOfTheDay = null;
 
@@ -345,6 +354,10 @@ const Storage = {
     }
   }
 
+  // People can use the whole app without an account -- data just lives in
+  // this browser's localStorage (via the Storage adapter above) until they
+  // choose to sign in/up to sync it. So "no session" is never a dead end
+  // that blocks the UI; it just means isLocalMode.
   async function initAuth() {
     if (authInitialized) return;
     authInitialized = true;
@@ -353,7 +366,6 @@ const Storage = {
       authReady = true;
       isLocalMode = true;
       authUser = { id: 'local' };
-      isLocalMode = true;
       authError = '';
       render();
       load();
@@ -364,28 +376,40 @@ const Storage = {
       const {
         data: { session },
       } = await supabaseClient.auth.getSession();
-      authUser = session?.user || null;
+      if (session?.user) {
+        authUser = session.user;
+        isLocalMode = false;
+      } else {
+        authUser = { id: 'local' };
+        isLocalMode = true;
+      }
       authReady = true;
       render();
-      if (authUser) load();
+      load();
     } catch (e) {
       authError = 'Could not initialize auth.';
       authReady = true;
+      isLocalMode = true;
+      authUser = { id: 'local' };
       render();
+      load();
     }
 
     supabaseClient.auth.onAuthStateChange((event, session) => {
-      authUser = session?.user || null;
-      authReady = true;
+      // A sign-in/sign-up submit (or the guest-data confirm/cancel step it
+      // may trigger) is already handling this explicitly -- don't race it.
+      if (authFlowInProgress) return;
       authError = '';
-      if (event === 'SIGNED_OUT') {
-        authMessage = 'Signed out.';
-      }
-      if (authUser) {
-        load();
+      if (session?.user) {
+        authUser = session.user;
+        isLocalMode = false;
       } else {
-        render();
+        authUser = { id: 'local' };
+        isLocalMode = true;
+        if (event === 'SIGNED_OUT') authMessage = 'Signed out.';
       }
+      authReady = true;
+      load();
     });
   }
 
@@ -565,109 +589,6 @@ const Storage = {
     return `<svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
   }
 
-  // ---------- auth shell ----------
-  function authView() {
-    return `
-    <div class="auth-shell">
-      <div class="auth-card">
-        <div class="brand">Colmeia<span>.</span></div>
-        <h1>${authMode === 'signin' ? 'Welcome back' : 'Create your account'}</h1>
-        <p>${authMode === 'signin' ? 'Sign in to sync your planner across devices.' : 'Create an account to start syncing your planner.'}</p>
-        <form class="auth-form" data-auth-form>
-          <input class="auth-input" type="email" placeholder="Email" value="${escapeAttr(authEmail)}" data-auth-email required />
-          <input class="auth-input" type="password" placeholder="Password" value="${escapeAttr(authPassword)}" data-auth-password required />
-          <button class="btn" type="submit">${authMode === 'signin' ? 'Sign in' : 'Create account'}</button>
-        </form>
-        <button class="auth-toggle" data-auth-toggle>${authMode === 'signin' ? 'Need an account? Create one' : 'Already have an account? Sign in'}</button>
-        ${authError ? `<div class="auth-error">${escapeHtml(authError)}</div>` : ''}
-        ${authMessage ? `<div class="auth-message">${escapeHtml(authMessage)}</div>` : ''}
-      </div>
-    </div>`;
-  }
-
-  function bindAuthEvents() {
-    const form = document.querySelector('[data-auth-form]');
-    if (form) {
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        authError = '';
-        authMessage = '';
-
-        if (!supabaseClient) {
-          authError = 'Supabase is not available.';
-          render();
-          return;
-        }
-
-        const email = authEmail.trim();
-        const password = authPassword;
-        if (!email || !password) {
-          authError = 'Please enter both your email and password.';
-          render();
-          return;
-        }
-
-        try {
-          let result;
-          if (authMode === 'signin') {
-            result = await supabaseClient.auth.signInWithPassword({
-              email,
-              password,
-            });
-          } else {
-            result = await supabaseClient.auth.signUp({ email, password });
-          }
-          if (result.error) {
-            authError = result.error.message;
-            render();
-            return;
-          }
-
-          authUser = result?.data?.user || result?.data?.session?.user || null;
-          authReady = true;
-          authMessage =
-            authMode === 'signin'
-              ? 'Signed in successfully.'
-              : 'Account created. You can now sign in.';
-          authPassword = '';
-          if (authUser) {
-            isLocalMode = false;
-            load();
-          } else {
-            render();
-          }
-        } catch (e) {
-          authError = 'Authentication failed.';
-          render();
-        }
-      };
-    }
-
-    const toggle = document.querySelector('[data-auth-toggle]');
-    if (toggle) {
-      toggle.onclick = () => {
-        authMode = authMode === 'signin' ? 'signup' : 'signin';
-        authError = '';
-        authMessage = '';
-        render();
-      };
-    }
-
-    const emailInput = document.querySelector('[data-auth-email]');
-    if (emailInput) {
-      emailInput.oninput = (e) => {
-        authEmail = e.target.value;
-      };
-    }
-
-    const passwordInput = document.querySelector('[data-auth-password]');
-    if (passwordInput) {
-      passwordInput.oninput = (e) => {
-        authPassword = e.target.value;
-      };
-    }
-  }
-
   // ---------- render root ----------
   function render() {
     const app = document.getElementById('app');
@@ -675,12 +596,6 @@ const Storage = {
 
     if (!authReady) {
       app.innerHTML = `<div class="auth-shell"><div class="auth-card"><div class="brand">Colmeia<span>.</span></div><h1>Connecting…</h1><p>Preparing your planner.</p></div></div>`;
-      return;
-    }
-
-    if (!authUser && !isLocalMode) {
-      app.innerHTML = authView();
-      bindAuthEvents();
       return;
     }
 
@@ -713,7 +628,11 @@ const Storage = {
         <div class="sidebar-tools">
           <button class="side-btn" data-toggle-dark>${icon(state.darkMode ? 'sun' : 'moon')} <span>${state.darkMode ? 'Light mode' : 'Dark mode'}</span></button>
           <button class="side-btn" data-open-modal="export">${icon('download')} <span>Export data</span></button>
-          <button class="side-btn" data-auth-signout><span>↩</span> <span>Sign out</span></button>
+          ${
+            isLocalMode
+              ? `<button class="side-btn" data-open-modal="auth"><span>🔐</span> <span>Sign in to save</span></button>`
+              : `<button class="side-btn" data-auth-signout><span>↩</span> <span>Sign out</span></button>`
+          }
           <div class="sidebar-foot">
             <div class="sync-status">${escapeHtml(syncStatus)}</div>
             ${jokeOfTheDay ? `"${escapeHtml(jokeOfTheDay)}"` : 'Everything you need to track, in one place.'}
@@ -1123,6 +1042,44 @@ const Storage = {
 
   // ---------- Modals ----------
   function renderModal() {
+    if (modal === 'auth') {
+      if (guestDataPendingReplace) {
+        const counts = [
+          state.events.length === 1
+            ? '1 event'
+            : `${state.events.length} events`,
+          state.tasks.length === 1
+            ? '1 to-do item'
+            : `${state.tasks.length} to-do items`,
+          state.notes.length === 1 ? '1 note' : `${state.notes.length} notes`,
+        ].join(', ');
+        return `<div class="overlay" data-overlay>
+          <div class="modal" style="width:440px;">
+            <h3>Replace your trial data?</h3>
+            <p style="margin:0 0 16px 0; color:var(--muted);">You're signing in as <strong>${escapeHtml(guestDataPendingReplace.email || '')}</strong>, and that account already has data saved in the cloud. Continuing will replace what you've added here (${counts}) with your account's saved data. This can't be undone.</p>
+            <div class="modal-actions">
+              <button class="btn ghost" data-auth-cancel-replace>Keep my trial data</button>
+              <button class="btn" data-auth-confirm-replace>Replace with my account data</button>
+            </div>
+          </div>
+        </div>`;
+      }
+      return `<div class="overlay" data-overlay>
+        <div class="modal" style="width:400px;">
+          <h3>${authMode === 'signin' ? 'Sign in' : 'Create account'}</h3>
+          <p style="margin:0 0 14px 0; color:var(--muted); font-size:var(--font-size-small);">${authMode === 'signin' ? 'Sign in to sync your planner across devices.' : 'Create an account to save your planner and access it anywhere.'}</p>
+          <div class="field"><label>Email</label><input type="email" id="m-auth-email" value="${escapeAttr(authEmail)}" placeholder="you@example.com" /></div>
+          <div class="field"><label>Password</label><input type="password" id="m-auth-password" value="${escapeAttr(authPassword)}" placeholder="••••••••" /></div>
+          ${authError ? `<div class="auth-error">${escapeHtml(authError)}</div>` : ''}
+          ${authMessage ? `<div class="auth-message">${escapeHtml(authMessage)}</div>` : ''}
+          <div class="modal-actions">
+            <button class="btn ghost" data-close-modal>Cancel</button>
+            <button class="btn ghost" type="button" data-auth-toggle-mode>${authMode === 'signin' ? 'Need an account?' : 'Have an account?'}</button>
+            <button class="btn" data-auth-submit>${authMode === 'signin' ? 'Sign in' : 'Create account'}</button>
+          </div>
+        </div>
+      </div>`;
+    }
     if (modal === 'event') {
       const existing = editingEventId
         ? state.events.find((e) => e.id === editingEventId)
@@ -1140,7 +1097,13 @@ const Storage = {
             }
           : null);
       const defaultDate = src ? src.date : state.selectedDate;
-      const types = ['Meeting', 'Bill payment', 'Appointment', 'Other'];
+      const types = [
+        'Meeting',
+        'Bill payment',
+        'Appointment',
+        'Deadline',
+        'Other',
+      ];
       const repeats = [
         ['none', 'Does not repeat'],
         ['daily', 'Daily'],
@@ -1361,14 +1324,165 @@ const Storage = {
   function bindEvents() {
     const signOutBtn = document.querySelector('[data-auth-signout]');
     if (signOutBtn) {
+      // Deliberately doesn't set isLocalMode/authUser/call load() itself --
+      // signOut() fires the onAuthStateChange listener in initAuth(), which
+      // is the single source of truth for reacting to that. This button
+      // only shows when a real session exists, which means supabaseClient
+      // is guaranteed to be set.
       signOutBtn.onclick = async () => {
         authError = '';
+        await supabaseClient.auth.signOut();
+      };
+    }
+
+    // ---- sign in / sign up (guest -> account) ----
+    const authSubmitBtn = document.querySelector('[data-auth-submit]');
+    if (authSubmitBtn) {
+      authSubmitBtn.onclick = async () => {
+        const emailEl = document.getElementById('m-auth-email');
+        const passwordEl = document.getElementById('m-auth-password');
+        const email = emailEl ? emailEl.value.trim() : '';
+        const password = passwordEl ? passwordEl.value : '';
+        authEmail = email;
+        authPassword = password;
+        authError = '';
         authMessage = '';
-        if (supabaseClient && !isLocalMode) {
-          await supabaseClient.auth.signOut();
+
+        if (!supabaseClient) {
+          authError = 'Supabase is not available.';
+          render();
+          return;
         }
-        authUser = isLocalMode ? { id: 'local' } : null;
-        authReady = true;
+        if (!email || !password) {
+          authError = 'Please enter both your email and password.';
+          render();
+          return;
+        }
+
+        authFlowInProgress = true;
+        try {
+          if (authMode === 'signin') {
+            const result = await supabaseClient.auth.signInWithPassword({
+              email,
+              password,
+            });
+            if (result.error) {
+              authFlowInProgress = false;
+              authError = result.error.message;
+              render();
+              return;
+            }
+            const user = result.data.user || result.data.session?.user;
+            const hasGuestData =
+              state.events.length > 0 ||
+              state.tasks.length > 0 ||
+              state.notes.length > 0;
+            if (hasGuestData) {
+              // Pause here -- .auth modal now shows the confirm-replace
+              // step instead. authFlowInProgress stays true until that
+              // step resolves (confirm or cancel), so the listener keeps
+              // deferring to this flow throughout.
+              guestDataPendingReplace = user;
+              render();
+            } else {
+              authUser = user;
+              isLocalMode = false;
+              authPassword = '';
+              modal = null;
+              authFlowInProgress = false;
+              load();
+            }
+          } else {
+            const result = await supabaseClient.auth.signUp({
+              email,
+              password,
+            });
+            if (result.error) {
+              authFlowInProgress = false;
+              authError = result.error.message;
+              render();
+              return;
+            }
+            const session = result.data.session;
+            if (!session) {
+              // Email confirmation required -- nothing to migrate yet,
+              // leave guest data untouched.
+              authFlowInProgress = false;
+              authMode = 'signin';
+              authMessage =
+                'Account created! Check your email to confirm, then sign in.';
+              authPassword = '';
+              render();
+              return;
+            }
+            // Brand-new account, so there's no existing cloud data to
+            // conflict with -- safe to auto-migrate the guest data.
+            authUser = result.data.user || session.user;
+            isLocalMode = false;
+            authPassword = '';
+            modal = null;
+            await save();
+            authFlowInProgress = false;
+            render();
+          }
+        } catch (e) {
+          authFlowInProgress = false;
+          authError = 'Authentication failed.';
+          render();
+        }
+      };
+    }
+
+    const authToggleModeBtn = document.querySelector('[data-auth-toggle-mode]');
+    if (authToggleModeBtn) {
+      authToggleModeBtn.onclick = () => {
+        authMode = authMode === 'signin' ? 'signup' : 'signin';
+        authError = '';
+        authMessage = '';
+        render();
+      };
+    }
+
+    const authEmailInput = document.getElementById('m-auth-email');
+    if (authEmailInput) {
+      authEmailInput.oninput = (e) => {
+        authEmail = e.target.value;
+      };
+    }
+    const authPasswordInput = document.getElementById('m-auth-password');
+    if (authPasswordInput) {
+      authPasswordInput.oninput = (e) => {
+        authPassword = e.target.value;
+      };
+    }
+
+    const confirmReplaceBtn = document.querySelector(
+      '[data-auth-confirm-replace]',
+    );
+    if (confirmReplaceBtn) {
+      confirmReplaceBtn.onclick = () => {
+        authUser = guestDataPendingReplace;
+        guestDataPendingReplace = null;
+        isLocalMode = false;
+        modal = null;
+        authFlowInProgress = false;
+        load();
+      };
+    }
+    const cancelReplaceBtn = document.querySelector(
+      '[data-auth-cancel-replace]',
+    );
+    if (cancelReplaceBtn) {
+      cancelReplaceBtn.onclick = async () => {
+        // Undo the sign-in server-side too -- otherwise a later reload
+        // would pick up the real session and load the account's data
+        // anyway, without ever having asked.
+        if (supabaseClient) await supabaseClient.auth.signOut();
+        guestDataPendingReplace = null;
+        authFlowInProgress = false;
+        authError = '';
+        authMessage = '';
+        modal = null;
         render();
       };
     }
@@ -1446,10 +1560,21 @@ const Storage = {
           render();
         }),
     );
+    // If the confirm-replace step gets dismissed via the generic overlay
+    // click or close button rather than its own dedicated buttons, still
+    // undo the sign-in server-side -- same reasoning as the dedicated
+    // cancel button above.
+    const abandonPendingReplace = () => {
+      if (!guestDataPendingReplace) return;
+      if (supabaseClient) supabaseClient.auth.signOut();
+      guestDataPendingReplace = null;
+      authFlowInProgress = false;
+    };
     const overlay = document.querySelector('[data-overlay]');
     if (overlay)
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
+          abandonPendingReplace();
           editingEventId = null;
           editingTaskId = null;
           editingNoteId = null;
@@ -1466,6 +1591,7 @@ const Storage = {
     document.querySelectorAll('[data-close-modal]').forEach(
       (b) =>
         (b.onclick = () => {
+          abandonPendingReplace();
           editingEventId = null;
           editingTaskId = null;
           editingNoteId = null;
@@ -1481,14 +1607,15 @@ const Storage = {
     );
 
     // Enter-to-save works in any of the add/edit modals (event, task, note,
-    // category) -- one generic handler instead of wiring each field separately.
-    // Skipped inside a <textarea>, where Enter should insert a newline.
+    // category, auth) -- one generic handler instead of wiring each field
+    // separately. Skipped inside a <textarea>, where Enter should insert a
+    // newline.
     const modalEl = document.querySelector('.modal');
     if (modalEl) {
       modalEl.onkeydown = (e) => {
         if (e.key !== 'Enter' || e.target.tagName === 'TEXTAREA') return;
         const saveBtn = modalEl.querySelector(
-          '[data-save-event], [data-save-task], [data-save-note], [data-save-category]',
+          '[data-save-event], [data-save-task], [data-save-note], [data-save-category], [data-auth-submit]',
         );
         if (saveBtn) {
           e.preventDefault();

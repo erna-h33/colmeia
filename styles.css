@@ -58,31 +58,6 @@ body {
   margin: 0 0 1rem;
   color: var(--muted);
 }
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.auth-input {
-  width: 100%;
-  padding: 11px 12px;
-  border-radius: 14px;
-  border: 1.5px solid var(--line);
-  background: var(--paper);
-  color: var(--graphite);
-  font-family: 'Poppins', sans-serif;
-  font-size: var(--font-size-medium);
-}
-.auth-toggle {
-  margin-top: 12px;
-  background: none;
-  border: none;
-  color: var(--clay);
-  cursor: pointer;
-  font-family: 'Poppins', sans-serif;
-  font-size: var(--font-size-small);
-  padding: 0;
-}
 .auth-error {
   margin-top: 12px;
   color: var(--clay);
