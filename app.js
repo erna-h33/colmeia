@@ -694,9 +694,7 @@ const Storage = {
   }
 
   function sidebar() {
-    const upcoming = state.events.filter(
-      (e) => daysUntil(e.date, e.time) < 48 && daysUntil(e.date, e.time) > -240,
-    ).length;
+    const eventCount = state.events.length;
     const openTasks = state.tasks.filter((t) => !t.done).length;
     return `
     <div class="sidebar">
@@ -704,7 +702,7 @@ const Storage = {
       <input class="global-search" placeholder="Search everything…" value="${escapeAttr(state.globalQuery || '')}" data-global-search />
       <div class="nav-scroll">
         <button class="nav-btn ${state.view === 'agenda' && !state.globalQuery ? 'active' : ''}" data-view="agenda">
-          ${icon('calendar')} <span>Agenda</span> <span class="count">${upcoming}</span>
+          ${icon('calendar')} <span>Agenda</span> <span class="count">${eventCount}</span>
         </button>
         <button class="nav-btn ${state.view === 'week' && !state.globalQuery ? 'active' : ''}" data-view="week">
           ${icon('checkSquare')} <span>To Do</span> <span class="count">${openTasks}</span>
