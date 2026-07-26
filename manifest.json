@@ -1,6 +1,6 @@
 {
-  "name": "Colmeia",
-  "short_name": "Colmeia",
+  "name": "Beehive",
+  "short_name": "Beehive",
   "description": "Your all-in-one personal organizer -- agenda, to-dos, and notes.",
   "start_url": "./index.html",
   "scope": "./",

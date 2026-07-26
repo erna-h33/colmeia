@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colmeia-v3';
+const CACHE_NAME = 'beehive-v1';
 const ASSETS = [
   './',
   './index.html',

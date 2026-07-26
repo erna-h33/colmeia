@@ -1,4 +1,4 @@
-# Colmeia
+# Beehive
 
 A personal organizer -- agenda (calendar), to-dos, and notes/links, with the
 ability to "clip" a saved note or link onto a reminder.
@@ -39,8 +39,8 @@ most common options.
 6. Open that URL on your phone and test "Add to Home Screen" -- the honeycomb
    icon should show up
 7. **Optional -- rename the URL:** Site settings -> "Change site name" ->
-   pick something like `colmeia` (subject to availability) -> your URL
-   becomes `https://colmeia.netlify.app`
+   pick something like `beehive` (subject to availability) -> your URL
+   becomes `https://beehive.netlify.app`
 8. **Optional -- custom domain:** Site settings -> Domain management ->
    "Add a domain" -> follow the DNS instructions if you own a domain
 
@@ -51,7 +51,7 @@ folder onto the same site's "Deploys" tab -- it replaces the live version.
 
 ### Option B: Netlify via GitHub (recommended once you're iterating often, since every push auto-deploys)
 
-1. Create a new repository on **https://github.com** (e.g. `colmeia`)
+1. Create a new repository on **https://github.com** (e.g. `beehive`)
 2. Push this folder's contents to that repo:
    ```
    cd site
@@ -59,11 +59,11 @@ folder onto the same site's "Deploys" tab -- it replaces the live version.
    git add .
    git commit -m "Initial commit"
    git branch -M main
-   git remote add origin https://github.com/YOUR-USERNAME/colmeia.git
+   git remote add origin https://github.com/YOUR-USERNAME/beehive.git
    git push -u origin main
    ```
 3. In Netlify: **"Add new site"** -> **"Import an existing project"** ->
-   **"Deploy with GitHub"** -> authorize Netlify -> pick the `colmeia` repo
+   **"Deploy with GitHub"** -> authorize Netlify -> pick the `beehive` repo
 4. Build settings: leave **Build command blank** and **Publish directory** as
    `.` (this is a static site, nothing to build)
 5. Click **Deploy** -- you get the same kind of live URL as Option A
@@ -87,7 +87,7 @@ folder onto the same site's "Deploys" tab -- it replaces the live version.
    - "Set up and deploy?" -> **Yes**
    - "Which scope?" -> pick your account
    - "Link to existing project?" -> **No**
-   - "What's your project's name?" -> `colmeia` (or anything)
+   - "What's your project's name?" -> `beehive` (or anything)
    - "In which directory is your code located?" -> `./` (press Enter)
    - It will detect no framework -- that's correct, confirm/continue
 6. Vercel deploys and prints a live URL in the terminal
